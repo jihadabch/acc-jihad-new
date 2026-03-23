@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>مؤسسة العبوشة - النسخة v69 (فصل المالية عن الفواتير)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root { --primary: #2c3e50; --success: #27ae60; --info: #2980b9; --danger: #e74c3c; --warning: #f1c40f; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #f4f7f6; padding: 20px; direction: rtl; margin: 0; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .cash-banner { background: var(--primary); color: white; padding: 15px; border-radius: 8px; text-align: center; margin-bottom: 15px; font-size: 22px; font-weight: bold; border: 2px solid var(--warning); }
+        .nav { display: flex; gap: 5px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nav button { flex: 1; padding: 12px; cursor: pointer; border: none; background: #95a5a6; color: white; border-radius: 5px; font-weight: bold; }
+        .nav button.active { background: var(--success); }
+        .page { display: none; }
+        .page.active { display: block; }
+        label { display: block; font-weight: bold; margin-top: 10px; font-size: 14px; color: var(--primary); }
+        input, select { padding: 10px; margin: 5px 0; width: 100%; border: 1px solid #ccc; border-radius: 5px; box-sizing: border-box; }
+        .btn { width: 100%; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; margin-top: 5px; color: white; transition: 0.3s; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #eee; padding: 8px; text-align: center; font-size: 13px; }
+        th { background: #f8f9fa; }
+        .total-box { background: var(--warning); padding: 15px; text-align: center; font-size: 20px; font-weight: bold; border-radius: 8px; border: 2px solid #333; margin-top: 10px; }
+        .action-btn { color: white; border: none; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; margin: 2px; }
+        .rep-card { background: #fffde7; padding: 20px; border-radius: 8px; border: 2px solid #fbc02d; margin-top: 15px; }
+        @media print { .no-print, .nav, .cash-banner, .btn, input, select { display: none !important; } body { background: white; padding: 0; } .container { box-shadow: none; border: none; width: 100%; } .rep-card { display: block !important; border: none; background: white; padding: 0; } table { width: 100%; border: 1px solid black; } th, td { border: 1px solid black; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="cash-banner no-print">💰 رصيد الصندوق: <span id="cash-total">0.00</span> $</div>
+    
+    <div class="nav no-print">
+        <button onclick="tab('inv', this)" id="btn-tab-inv" class="active">🧾 الفواتير</button>
+        <button onclick="tab('stk', this)">📦 المخزن</button>
+        <button onclick="tab('rep', this)">📊 التقارير</button>
+        <button onclick="tab('fin', this)">💵 المالية</button>
+        <button onclick="tab('nam', this)">👤 الأسماء</button>
+    </div>
+
+    <div id="inv" class="page active no-print">
+        <div style="display:flex; gap:10px;"><div style="flex:1;"><label>النوع</label><select id="i-t" onchange="autoP()"><option value="بيع">بيع</option><option value="شراء">شراء</option></select></div><div style="flex:1;"><label>الاسم</label><select id="i-u"></select></div></div>
+        <label>البحث واختيار الصنف</label>
+        <input type="text" id="inv-search-item" placeholder="🔍 ابحث بالاسم أو الباركود..." oninput="updUI(); autoP();">
+        <select id="i-i" onchange="autoP()"></select>
+        <div style="display:flex; gap:10px;"><div style="flex:1;"><label>الكمية</label><input type="number" id="i-q" value="1"></div><div style="flex:1;"><label>السعر $</label><input type="number" id="i-p"></div></div>
+        <button class="btn" style="background:var(--info)" onclick="addCart()">+ إضافة للجدول</button>
+        <table id="tbl-cart"><thead><tr><th>الصنف</th><th>سعر</th><th>كمية</th><th>مجموع</th><th>X</th></tr></thead><tbody></tbody></table>
+        <div id="g-t" class="total-box">0.00 $</div>
+        <button class="btn" style="background:var(--success)" onclick="saveInvFinal()">ترحيل الفاتورة فقط ✅</button>
+        <p style="font-size: 11px; color: #777; text-align: center;">* الترحيل يؤثر على كميات المخزن وحساب الشخص فقط، ولا يسجل حركة في الصندوق.</p>
+    </div>
+
+    <div id="stk" class="page no-print">
+        <div style="background:#e3f2fd; padding:10px; border-radius:8px; margin-bottom:10px;"><label>📁 استيراد Excel</label><input type="file" id="excel-file" accept=".xlsx, .xls" onchange="importExcel(this)"></div>
+        <div style="display:flex; gap:5px;"><div style="flex:1;"><label>الباركود</label><input type="text" id="s-b"></div><div style="flex:2;"><label>الصنف</label><input type="text" id="s-n"></div></div>
+        <div style="display:flex; gap:5px;"><div style="flex:1;"><label>الكمية</label><input type="number" id="s-q" value="0"></div><div style="flex:1;"><label>كلفة</label><input type="number" id="s-c" value="0"></div><div style="flex:1;"><label>مبيع</label><input type="number" id="s-p" value="0"></div></div>
+        <button class="btn" style="background:var(--success)" onclick="saveStk()">حفظ بالمخزن ✅</button>
+        <input type="text" id="stk-search" placeholder="🔍 بحث..." oninput="updUI()" style="margin-top:10px;">
+        <table id="tbl-stk"><thead><tr><th>الباركود</th><th>الصنف</th><th>الكمية</th><th>كلفة</th><th>مبيع</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div id="rep" class="page">
+        <div class="no-print"><label>كشف حساب</label><div style="display:flex; gap:10px;"><select id="r-u" style="flex:2;"></select><button class="btn" onclick="showRep()" style="background:var(--info); flex:1; height:42px;">🔍 عرض</button></div></div>
+        <div id="rep-out" class="rep-card" style="display:none;"></div>
+        <hr class="no-print"><h4 class="no-print">سجل الفواتير</h4>
+        <table id="tbl-log" class="no-print"><thead><tr><th>التاريخ</th><th>الاسم</th><th>النوع</th><th>المجموع</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div id="fin" class="page no-print">
+        <h3 id="fin-title">إضافة حركة مالية يدوية</h3>
+        <label>الاسم</label><select id="f-u"></select>
+        <label>الحركة</label><select id="f-t"><option value="قبض">قبض (+)</option><option value="صرف">صرف (-)</option></select>
+        <input type="number" id="f-a" placeholder="المبلغ $">
+        <button id="btn-fin-save" class="btn" onclick="saveFin()" style="background:var(--success)">حفظ في الصندوق 💵</button>
+        <button id="btn-fin-cancel" class="btn" onclick="cancelFinEdit()" style="background:var(--primary); display:none;">إلغاء التعديل ✖️</button>
+        <hr><h4>سجل الصندوق</h4><table id="tbl-fin-log"><thead><tr><th>التاريخ</th><th>الاسم</th><th>النوع</th><th>المبلغ</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+    </div>
+
+    <div id="nam" class="page no-print">
+        <h3 id="nam-title">إدارة الأسماء</h3>
+        <label>الاسم</label><input type="text" id="n-n" placeholder="الاسم">
+        <label>النوع</label><select id="n-r"><option value="زبون">زبون</option><option value="مورد">مورد</option></select>
+        <button id="btn-nam-save" class="btn" onclick="saveNam()" style="background:var(--success)">حفظ ✅</button>
+        <button id="btn-nam-cancel" class="btn" onclick="cancelNamEdit()" style="background:var(--primary); display:none;">إلغاء ✖️</button>
+        <table id="tbl-names"><thead><tr><th>الاسم</th><th>النوع</th><th>إجراء</th></tr></thead><tbody></tbody></table>
+        <button class="btn" onclick="resetEverything()" style="background:var(--danger); margin-top:80px;">⚠️ تصفير البرنامج ⚠️</button>
+    </div>
+</div>
+
+<script>
+    let STK = JSON.parse(localStorage.getItem('V37_STK')) || [];
+    let NMS = JSON.parse(localStorage.getItem('V37_NMS')) || [];
+    let LOG = JSON.parse(localStorage.getItem('V37_LOG')) || []; 
+    let FIN = JSON.parse(localStorage.getItem('V37_FIN')) || []; 
+    let CRT = [];
+    let editNamIdx = -1;
+    let editFinIdx = -1;
+
+    function tab(id, b) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.querySelectorAll('.nav button').forEach(btn => btn.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        if(b) b.classList.add('active');
+        updUI();
+    }
+
+    function updUI() {
+        let nOpt = NMS.map(x => `<option value="${x.name}">${x.name}</option>`).join('');
+        document.querySelectorAll('#f-u, #i-u, #r-u').forEach(el => el.innerHTML = nOpt);
+        
+        let kwInv = document.getElementById('inv-search-item').value.toLowerCase();
+        let filteredSTK = STK.filter(x => x.name.toLowerCase().includes(kwInv) || (x.barcode && x.barcode.includes(kwInv)));
+        document.getElementById('i-i').innerHTML = filteredSTK.map(x => `<option value="${x.name}">${x.name} [${x.barcode||'-'}]</option>`).join('');
+
+        document.getElementById('tbl-names').querySelector('tbody').innerHTML = NMS.map((x, i) => `<tr><td>${x.name}</td><td>${x.role}</td><td><button onclick="startEditNam(${i})" class="action-btn" style="background:var(--warning); color:black;">✏️</button><button onclick="deleteNam(${i})" class="action-btn" style="background:var(--danger)">🗑️</button></td></tr>`).join('');
+        document.getElementById('tbl-fin-log').querySelector('tbody').innerHTML = FIN.map((x, i) => `<tr><td>${x.date}</td><td>${x.user}</td><td>${x.type}</td><td>${x.amount}$</td><td><button onclick="startEditFin(${i})" class="action-btn" style="background:var(--warning); color:black;">✏️</button><button onclick="deleteFin(${i})" class="action-btn" style="background:var(--danger)">🗑️</button></td></tr>`).join('');
+        
+        let kwStk = document.getElementById('stk-search').value.toLowerCase();
+        document.getElementById('tbl-stk').querySelector('tbody').innerHTML = STK.filter(x => x.name.toLowerCase().includes(kwStk)).map(x => `<tr><td>${x.barcode||'-'}</td><td>${x.name}</td><td>${x.qty}</td><td>${x.cost}$</td><td>${x.price}$</td><td><button onclick="editStk('${x.name}')" class="action-btn" style="background:var(--info)">✏️</button><button onclick="deleteStk('${x.name}')" class="action-btn" style="background:var(--danger)">🗑️</button></td></tr>`).join('');
+        
+        document.getElementById('tbl-log').querySelector('tbody').innerHTML = LOG.map(x => `<tr><td>${x.date}</td><td>${x.user}</td><td>${x.type}</td><td>${x.total.toFixed(2)}$</td><td><button onclick="printInv(${x.id})" class="action-btn" style="background:var(--primary)">🖨️</button><button onclick="editInvoice(${x.id})" class="action-btn" style="background:var(--warning); color:black;">✏️</button><button onclick="deleteInvoice(${x.id})" class="action-btn" style="background:var(--danger)">🗑️</button></td></tr>`).join('');
+        
+        let cash = 0; FIN.forEach(f => cash += (f.type==='قبض' ? f.amount : -f.amount));
+        document.getElementById('cash-total').innerText = cash.toFixed(2);
+    }
+
+    // --- التعديل الجوهري هنا: حذف الربط التلقائي ---
+    function saveInvFinal() {
+        let u = document.getElementById('i-u').value, t = document.getElementById('i-t').value;
+        if(CRT.length === 0) return;
+        let fid = Date.now();
+
+        // 1. تحديث كميات المخزن فقط
+        CRT.forEach(c => {
+            let s = STK.find(x => x.name === c.name);
+            if(s) {
+                if(t==='بيع') s.qty -= c.qty; 
+                else { s.qty += c.qty; s.cost = c.price; }
+            }
+        });
+
+        // 2. تسجيل الفاتورة في السجل (بدون إنشاء حركة مالية في مصفوفة FIN)
+        let total = CRT.reduce((a,b)=>a+b.total,0);
+        LOG.unshift({id: fid, user: u, type: t, items: [...CRT], total: total, date: new Date().toLocaleString('ar-LB')});
+
+        saveAll();
+        CRT = [];
+        drawCart();
+        updUI();
+        alert("تم ترحيل الفاتورة للمخزن وحساب الشخص بنجاح ✅ (لم يتم خصم/إضافة كاش للصندوق)");
+    }
+
+    // باقي الدوال المساعدة (نفسها لضمان الاستقرار)
+    function autoP() { let it = STK.find(x => x.name === document.getElementById('i-i').value); if(it) document.getElementById('i-p').value = (document.getElementById('i-t').value === 'بيع' ? it.price : it.cost); }
+    function startEditNam(i) { editNamIdx = i; document.getElementById('n-n').value = NMS[i].name; document.getElementById('n-r').value = NMS[i].role; document.getElementById('nam-title').innerText = "تعديل الاسم ✏️"; document.getElementById('btn-nam-save').innerText = "تحديث 🔄"; document.getElementById('btn-nam-cancel').style.display = "block"; }
+    function cancelNamEdit() { editNamIdx = -1; document.getElementById('n-n').value = ''; document.getElementById('nam-title').innerText = "إدارة الأسماء"; document.getElementById('btn-nam-save').innerText = "حفظ ✅"; document.getElementById('btn-nam-cancel').style.display = "none"; }
+    function saveNam() { let n = document.getElementById('n-n').value; if(!n) return; if(editNamIdx === -1) NMS.push({name:n, role:document.getElementById('n-r').value}); else { NMS[editNamIdx] = {name:n, role:document.getElementById('n-r').value}; cancelNamEdit(); } saveAll(); updUI(); }
+    function deleteNam(i) { if(confirm("حذف؟")) { NMS.splice(i,1); saveAll(); updUI(); } }
+    function startEditFin(i) { editFinIdx = i; document.getElementById('f-u').value = FIN[i].user; document.getElementById('f-t').value = FIN[i].type; document.getElementById('f-a').value = FIN[i].amount; document.getElementById('fin-title').innerText = "تعديل المالية ✏️"; document.getElementById('btn-fin-save').innerText = "تحديث 🔄"; document.getElementById('btn-fin-cancel').style.display = "block"; }
+    function cancelFinEdit() { editFinIdx = -1; document.getElementById('f-a').value = ''; document.getElementById('fin-title').innerText = "إضافة حركة مالية"; document.getElementById('btn-fin-save').innerText = "حفظ في الصندوق 💵"; document.getElementById('btn-fin-cancel').style.display = "none"; }
+    function saveFin() { let u = document.getElementById('f-u').value, a = parseFloat(document.getElementById('f-a').value) || 0; if(!u || a <= 0) return; if(editFinIdx === -1) FIN.unshift({id:Date.now(), user:u, type:document.getElementById('f-t').value, amount:a, date:new Date().toLocaleString('ar-LB')}); else { FIN[editFinIdx].user = u; FIN[editFinIdx].type = document.getElementById('f-t').value; FIN[editFinIdx].amount = a; cancelFinEdit(); } saveAll(); updUI(); }
+    function deleteFin(i) { if(confirm("حذف؟")) { FIN.splice(i,1); saveAll(); updUI(); } }
+    function saveStk() { let n = document.getElementById('s-n').value; if(!n) return; let f = STK.find(x => x.name === n); let d = {barcode: document.getElementById('s-b').value, name: n, qty: parseFloat(document.getElementById('s-q').value)||0, cost: parseFloat(document.getElementById('s-c').value)||0, price: parseFloat(document.getElementById('s-p').value)||0}; if(f) Object.assign(f, d); else STK.push(d); saveAll(); updUI(); }
+    function editStk(name) { let it = STK.find(x=>x.name===name); document.getElementById('s-b').value=it.barcode||''; document.getElementById('s-n').value=it.name; document.getElementById('s-q').value=it.qty; document.getElementById('s-c').value=it.cost; document.getElementById('s-p').value=it.price; }
+    function deleteStk(name) { if(confirm("حذف؟")) { STK = STK.filter(x => x.name !== name); saveAll(); updUI(); } }
+    function addCart() { let n=document.getElementById('i-i').value, q=parseFloat(document.getElementById('i-q').value)||0, p=parseFloat(document.getElementById('i-p').value)||0; if(n&&q>0) { CRT.push({name:n, qty:q, price:p, total:q*p}); drawCart(); } }
+    function drawCart() { let t=0; document.getElementById('tbl-cart').querySelector('tbody').innerHTML = CRT.map((x,i)=>{ t+=x.total; return `<tr><td>${x.name}</td><td>${x.price}$</td><td>${x.qty}</td><td>${x.total.toFixed(2)}$</td><td onclick="CRT.splice(${i},1);drawCart()">❌</td></tr>` }).join(''); document.getElementById('g-t').innerText = t.toFixed(2)+" $"; }
+    function deleteInvoice(id, silent = false) { if(!silent && !confirm("حذف؟")) return; let inv = LOG.find(x => x.id === id); if(inv) { inv.items.forEach(it => { let s = STK.find(x => x.name === it.name); if(s) { if(inv.type==='بيع') s.qty += it.qty; else s.qty -= it.qty; } }); LOG = LOG.filter(x => x.id !== id); saveAll(); updUI(); } }
+    function editInvoice(id) { if(!confirm("تعديل؟")) return; let inv = LOG.find(x => x.id === id); if(!inv) return; document.getElementById('i-u').value = inv.user; document.getElementById('i-t').value = inv.type; CRT = [...inv.items]; deleteInvoice(id, true); tab('inv', document.getElementById('btn-tab-inv')); drawCart(); }
+    function showRep() { let u = document.getElementById('r-u').value; if(!u) return; let out = document.getElementById('rep-out'); out.style.display = 'block'; let bal = 0; let rows = ""; LOG.filter(x => x.user === u).forEach(i => { if(i.type==='بيع') { bal += i.total; rows+=`<tr><td>${i.date}</td><td>بيع</td><td>${i.total.toFixed(2)}$</td><td>0</td></tr>`; } else { bal -= i.total; rows+=`<tr><td>${i.date}</td><td>شراء</td><td>0</td><td>${i.total.toFixed(2)}$</td></tr>`; } }); FIN.filter(x => x.user === u).forEach(f => { if(f.type==='قبض') { bal -= f.amount; rows+=`<tr><td>${f.date}</td><td>قبض كاش</td><td>0</td><td>${f.amount.toFixed(2)}$</td></tr>`; } else { bal += f.amount; rows+=`<tr><td>${f.date}</td><td>صرف كاش</td><td>${f.amount.toFixed(2)}$</td><td>0</td></tr>`; } }); out.innerHTML = `<h3>كشف: ${u}</h3><table border="1"><thead><tr><th>التاريخ</th><th>البيان</th><th>مدين (+)</th><th>دائن (-)</th></tr></thead><tbody>${rows}</tbody></table><h4>الرصيد المتبقي بذمته: ${bal.toFixed(2)} $</h4><button class="btn no-print" onclick="window.print()">طباعة الكشف</button>`; }
+    function printInv(id) { let i=LOG.find(x=>x.id===id); let w=window.open('','','width=600'); w.document.write(`<body dir="rtl"><h3>فاتورة: ${i.user}</h3><table border="1" style="width:100%">${i.items.map(t=>`<tr><td>${t.name}</td><td>${t.qty}</td><td>${t.price}</td></tr>`).join('')}</table><h4>المجموع: ${i.total}</h4></body>`); w.document.close(); w.print(); }
+    function resetEverything() { if(confirm("حذف كل البيانات؟")) { localStorage.clear(); location.reload(); } }
+    function saveAll() { localStorage.setItem('V37_STK', JSON.stringify(STK)); localStorage.setItem('V37_NMS', JSON.stringify(NMS)); localStorage.setItem('V37_LOG', JSON.stringify(LOG)); localStorage.setItem('V37_FIN', JSON.stringify(FIN)); }
+    function importExcel(input) { const reader = new FileReader(); reader.onload = (e) => { const wb = XLSX.read(new Uint8Array(e.target.result), {type:'array'}); const json = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]); json.forEach(r => { let n = r['الاسم']||r['name']; if(n) { let f = STK.find(x=>x.name===n); let d = {barcode: r['باركود']||r['barcode']||'', name: n, qty: r['الكمية']||0, cost: r['الكلفة']||0, price: r['المبيع']||0}; if(f) Object.assign(f, d); else STK.push(d); } }); saveAll(); updUI(); alert("تم الاستيراد ✅"); }; reader.readAsArrayBuffer(input.files[0]); }
+    window.onload = updUI;
+</script>
+</body>
+</html>
